@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Book;
 use App\Models\Category;
+use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
@@ -26,5 +27,22 @@ class DashboardController extends Controller
             : collect();
 
         return view('user.dashboard', compact('popularBooks', 'newBooks', 'categories'));
+    }
+
+    public function transactions()
+    {
+        $today = Carbon::today();
+        $currentMonth = Carbon::now()->month;
+        $currentYear = Carbon::now()->year;
+
+        $todayIncome = Transaction::whereDate('created_at', $today)->sum('price');
+        $monthIncome = Transaction::whereMonth('created_at', $currentMonth)
+                                  ->whereYear('created_at', $currentYear)
+                                  ->sum('price');
+        $totalIncome = Transaction::sum('price');
+
+        $transactions = Transaction::latest()->get();
+
+        return view('admin.transactions', compact('todayIncome', 'monthIncome', 'totalIncome', 'transactions'));
     }
 }
