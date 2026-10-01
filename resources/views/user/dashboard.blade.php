@@ -192,7 +192,7 @@
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                     </a>
                 </div>
-
+            
                 <div class="relative group">
                     @if(count(data_get($category, 'books', [])) > 4)
                         <button onclick="scrollSlider('slider-cat-{{ data_get($category, 'id') }}', 'left')" class="absolute -left-4 top-1/2 -translate-y-1/2 z-10 bg-white border border-slate-200 shadow-md p-2 rounded-full hover:bg-slate-50 text-slate-600 transition hidden group-hover:block">
