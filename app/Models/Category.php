@@ -9,11 +9,10 @@ class Category extends Model
 {
     use HasFactory;
 
-    protected $guarded = [];
+    protected $fillable = ['name', 'slug'];
 
-    // 1 File atau Kategori ini Punya Banyak Buku
     public function books()
     {
-        return $this->hasMany(Book::class);
+        return $this->belongsToMany(Book::class);
     }
 }
