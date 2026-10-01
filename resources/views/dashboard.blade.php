@@ -1,6 +1,9 @@
 <nav class="border-b border-slate-200 bg-white px-6 py-4 flex justify-between items-center sticky top-0 z-50">
     <!-- Logo / Judul -->
-    <h1 class="text-xl font-bold text-[#2563EB]">Ruang Pustaka</h1>
+    <a href="{{ url('/') }}" class="text-xl font-bold text-[#2563EB] flex items-center gap-3">
+        <img src="{{ asset('images/logo.png') }}" alt="Logo Ruang Pustaka" class="w-9 h-9 object-contain rounded-full bg-blue-50 p-0.5">
+        Ruang Pustaka
+    </a>
     
     <!-- Bagian Kanan Navbar -->
     <div class="flex items-center gap-3">
@@ -12,12 +15,14 @@
             </svg>
         </a>
 
-        <!-- Nama User & Logout -->
-        <span class="text-sm text-[#64748B] hidden md:inline">Selamat membaca, <strong class="text-[#0F172A]">{{ Auth::user()->name ?? 'User' }}</strong></span>
+        <!-- Nama User & Logout (Hanya tampil untuk Admin) -->
+        @if(Auth::check() && (strtolower(Auth::user()->role ?? '') === 'admin' || Auth::user()->usertype === 'admin' || Auth::user()->is_admin))
+            <span class="text-sm text-[#64748B] hidden md:inline">Selamat Datang, <strong class="text-[#0F172A]">{{ Auth::user()->name ?? 'Admin' }}</strong></span>
+        @endif
         
         <form method="POST" action="{{ route('logout') }}">
             @csrf
-            <button type="submit" class="text-xs bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 px-3 py-1.5 rounded-lg font-semibold transition">
+            <button type="submit" class="text-xs bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer">
                 Logout
             </button>
         </form>
