@@ -22,7 +22,7 @@ class VoucherController extends Controller
 
         $alreadyPurchased = Transaction::where('user_id', $user->id)
             ->where('title', $book->title)
-            ->exists() || session()->has('purchased_books_' . $book->id);
+            ->exists();
 
         if ($alreadyPurchased) {
             return response()->json([
