@@ -8,8 +8,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Midtrans Snap JS Script -->
     <script type="text/javascript" 
-            src="https://app.sandbox.midtrans.com/snap/snap.js" 
-            data-client-key="Mid-client-LjMP1zn4XEDLimPA"></script>
+            src="{{ \App\Services\MidtransGateway::snapJsUrl((bool) config('services.midtrans.is_production')) }}"
+            data-client-key="{{ config('services.midtrans.client_key') }}"></script>
     <style> body { font-family: 'Plus Jakarta Sans', sans-serif; } </style>
 </head>
 <body class="bg-[#F8FAFC] text-[#0F172A] min-h-screen py-12 px-6 antialiased flex items-center justify-center">
@@ -42,7 +42,10 @@
         </div>
 
         <!-- Tombol Aksi Pembayaran Midtrans -->
-        <button id="pay-button" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl font-semibold text-xs shadow-sm transition flex items-center justify-center gap-2">
+        <button id="pay-button"
+                data-book-id="{{ $book->id }}"
+                data-csrf-token="{{ csrf_token() }}"
+                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl font-semibold text-xs shadow-sm transition flex items-center justify-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
             </svg>
@@ -50,65 +53,6 @@
         </button>
     </div>
 
-    <script type="text/javascript">
-        document.getElementById('pay-button').onclick = function () {
-            // Ambil kode voucher dari input atau session jika ada
-            let voucherCode = document.getElementById('voucher_code') ? document.getElementById('voucher_code').value : '';
-
-            // Mengirim request ke rute proses beli dengan method POST dan menyertakan data voucher
-            fetch('/books/{{ $book->id }}/buy', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    voucher_code: voucherCode
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.snap_token) {
-                    window.snap.pay(data.snap_token, {
-                        onSuccess: function(result){
-                            // Konfirmasi balik ke server setelah pembayaran sukses agar used_count voucher bertambah
-                            fetch('/books/{{ $book->id }}/buy', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                                    'Accept': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    voucher_code: voucherCode,
-                                    payment_completed: true
-                                })
-                            }).then(() => {
-                                alert("Pembayaran berhasil!");
-                                window.location.href = "{{ route('books.show', $book->id) }}";
-                            });
-                        },
-                        onPending: function(result){
-                            alert("Menunggu pembayaran Anda!");
-                            console.log(result);
-                        },
-                        onError: function(result){
-                            alert("Pembayaran gagal!");
-                            console.log(result);
-                        },
-                        onClose: function(){
-                            alert('Anda menutup popup tanpa menyelesaikan pembayaran');
-                        }
-                    });
-                } else {
-                    alert('Gagal mendapatkan token: ' + (data.message || 'Terjadi kesalahan'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-        };
-    </script>
+    <script src="{{ asset('js/book-payment.js') }}?v={{ filemtime(public_path('js/book-payment.js')) }}"></script>
 </body>
 </html>
