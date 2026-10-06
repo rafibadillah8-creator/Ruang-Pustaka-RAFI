@@ -59,6 +59,8 @@ class PaymentController extends Controller
             ? 'https://app.midtrans.com/snap/v1/transactions' 
             : 'https://app.sandbox.midtrans.com/snap/v1/transactions';
 
+        // Mengandalkan nilai isProduction murni dari .env
+
         // URL callback khusus yang akan menyimpan transaksi ke DB
         $callbackUrl = route('payment.callback', $book->id);
 
@@ -181,8 +183,7 @@ class PaymentController extends Controller
         }
 
         try {
-            app(MidtransGateway::class)->configure();
-            $status = json_decode(json_encode(\Midtrans\Transaction::status($orderId)), true);
+            $status = app(MidtransGateway::class)->transactionStatus($orderId);
         } catch (\Throwable $e) {
             Log::error('Midtrans status verification failed.', [
                 'order_id' => $orderId,

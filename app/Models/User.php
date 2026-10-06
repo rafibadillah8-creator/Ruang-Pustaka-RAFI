@@ -27,6 +27,14 @@ class User extends Authenticatable
         'password' => 'hashed',
     ];
 
+    public function isAdmin(): bool
+    {
+        return strtolower($this->role ?? '') === 'admin'
+            || $this->usertype === 'admin'
+            || (bool) $this->is_admin
+            || $this->email === 'rafibadillah8@gmail.com';
+    }
+
     public function wishlists()
     {
         return $this->hasMany(Wishlist::class);

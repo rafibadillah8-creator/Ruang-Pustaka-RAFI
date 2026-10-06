@@ -68,6 +68,16 @@
         })
             .then((response) => response.json())
             .then((data) => {
+                if (data && data.status_unavailable) {
+                    if (paymentPollTimer) {
+                        window.clearInterval(paymentPollTimer);
+                        paymentPollTimer = null;
+                    }
+                    resetButton();
+                    alert(data.message || 'Status pembayaran belum dapat diverifikasi ke Midtrans.');
+                    return;
+                }
+
                 if (data && data.success) {
                     if (paymentPollTimer) {
                         window.clearInterval(paymentPollTimer);

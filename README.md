@@ -39,6 +39,24 @@ Configure the Midtrans Payment Notification URL to the public
 signature and gross amount match the configured server key and local payment
 order.
 
+For local Laragon development, a `.test` URL is not reachable by Midtrans, so
+notifications cannot be delivered directly to the local machine. Payment status
+can still be checked through Midtrans's Status API; if it returns
+`Transaction doesn't exist`, verify that the Client Key and Server Key are from
+the same Sandbox merchant account as the transaction, keep
+`MIDTRANS_IS_PRODUCTION=false`, and run `php artisan config:clear`. To test
+notifications locally, expose the application through a secure public tunnel
+and configure the tunnel URL with `/api/midtrans/notification` in the Sandbox
+dashboard. Never use Sandbox keys in Production or commit keys to source
+control.
+
+When using ngrok for local notifications, set the Midtrans Sandbox Payment
+Notification URL to the active HTTPS ngrok URL followed by
+`/api/midtrans/notification`. Keep using the Laragon `.test` host in the browser.
+The application restricts ngrok-host requests to this notification endpoint;
+all other routes remain local. A free ngrok URL can change after restarting the
+tunnel, so update the Sandbox dashboard URL when it changes.
+
 ## Learning Laravel
 
 Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.

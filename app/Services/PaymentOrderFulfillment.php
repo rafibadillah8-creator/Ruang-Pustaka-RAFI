@@ -16,6 +16,10 @@ class PaymentOrderFulfillment
         $fraudStatus = $status['fraud_status'] ?? 'accept';
         $grossAmount = $status['gross_amount'] ?? null;
 
+        if (($status['order_id'] ?? null) !== $paymentOrder->order_id) {
+            throw new InvalidArgumentException('Order ID Midtrans tidak cocok dengan pesanan.');
+        }
+
         if (!$this->amountMatches($paymentOrder->price, $grossAmount)) {
             throw new InvalidArgumentException('Nominal notifikasi Midtrans tidak cocok dengan pesanan.');
         }

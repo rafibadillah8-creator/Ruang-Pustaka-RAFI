@@ -36,10 +36,8 @@ class UserController extends Controller
 
         $userId = Auth::id();
         $user = Auth::user();
-        // 1. Cek apakah buku gratis
         $isFree = isset($book->price) && $book->price == 0;
-        $isAdmin = strtolower($user->role ?? '') === 'admin'
-            || ($user->email ?? null) === 'rafibadillah8@gmail.com';
+        $isAdmin = $user->isAdmin();
 
         // Only a transaction for this exact book grants purchased access.
         $hasPurchasedInDb = Transaction::where('user_id', $userId)

@@ -20,6 +20,10 @@ class MidtransGateway
 
         self::assertCredentialTypesMatch($clientKey, $serverKey);
 
+        // Mengandalkan nilai is_production dari .env secara ketat.
+        // Dihapus: Auto-detect environment, karena beberapa akun Midtrans Sandbox 
+        // ternyata menghasilkan key tanpa prefix 'SB-' (seperti kasus ini).
+
         Config::$serverKey = $serverKey;
         Config::$isProduction = $isProduction;
         Config::$isSanitized = true;
@@ -59,6 +63,24 @@ class MidtransGateway
         Config::$curlOptions = $curlOptions;
     }
 
+    public function transactionStatus(string $orderId): array
+    {
+        $this->configure();
+
+        $status = json_decode(
+            json_encode(\Midtrans\Transaction::status($orderId), JSON_THROW_ON_ERROR),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+
+        if (!is_array($status)) {
+            throw new RuntimeException('Midtrans returned an invalid transaction status response.');
+        }
+
+        return $status;
+    }
+
     public static function assertCredentialTypesMatch(string $clientKey, string $serverKey): void
     {
         $clientPrefixes = ['Mid-client-', 'SB-Mid-client-'];
@@ -86,6 +108,8 @@ class MidtransGateway
 
     public static function snapJsUrl(bool $isProduction): string
     {
+        // Dihapus auto-detect karena key sandbox user ternyata tidak ada prefix SB-
+
         return $isProduction
             ? 'https://app.midtrans.com/snap/snap.js'
             : 'https://app.sandbox.midtrans.com/snap/snap.js';

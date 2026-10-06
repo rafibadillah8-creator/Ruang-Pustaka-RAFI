@@ -189,13 +189,7 @@ class BookController extends Controller
     {
         $book = Book::with('categories')->findOrFail($id);
 
-        // Cek apakah user yang login merupakan Admin
-        $isAdmin = auth()->check() && (
-            strtolower(auth()->user()->role ?? '') === 'admin' || 
-            auth()->user()->usertype === 'admin' || 
-            auth()->user()->is_admin ||
-            auth()->user()->email === 'rafibadillah8@gmail.com'
-        );
+        $isAdmin = auth()->check() && auth()->user()->isAdmin();
 
         $isPurchased = false;
         
@@ -367,8 +361,7 @@ class BookController extends Controller
             }
 
             try {
-                app(MidtransGateway::class)->configure();
-                $status = json_decode(json_encode(\Midtrans\Transaction::status($orderId)), true);
+                $status = app(MidtransGateway::class)->transactionStatus($orderId);
             } catch (\Throwable $e) {
                 report($e);
                 return response()->json([
@@ -569,32 +562,16 @@ class BookController extends Controller
             ], 200);
         }
 
-        try {
-            app(MidtransGateway::class)->configure();
-        } catch (Exception $e) {
-            Log::error('Midtrans payment status check could not be configured.', [
-                'book_id' => $book->id,
-                'user_id' => $userId,
-                'exception' => $e,
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'pending' => true,
-                'message' => $e instanceof \InvalidArgumentException
-                    ? $e->getMessage()
-                    : 'Status pembayaran belum dapat diverifikasi.'
-            ], 503);
-        }
-
         $paidOrder = null;
         $lastStatus = null;
         $hasPendingOrder = false;
+        $statusLookupFailed = false;
 
         foreach ($orders as $order) {
             try {
-                $result = json_decode(json_encode(\Midtrans\Transaction::status($order->order_id)), true);
-            } catch (Exception $e) {
+                $result = app(MidtransGateway::class)->transactionStatus($order->order_id);
+            } catch (\Throwable $e) {
+                $statusLookupFailed = true;
                 Log::warning('Midtrans payment status lookup failed.', [
                     'order_id' => $order->order_id,
                     'exception' => $e,
@@ -630,6 +607,15 @@ class BookController extends Controller
         }
 
         if (!$paidOrder) {
+            if ($statusLookupFailed) {
+                return response()->json([
+                    'success' => false,
+                    'pending' => false,
+                    'status_unavailable' => true,
+                    'message' => 'Status pembayaran belum dapat diverifikasi ke Midtrans. Periksa pasangan Client Key/Server Key dan mode Sandbox/Production, lalu muat ulang halaman.'
+                ], 503);
+            }
+
             return response()->json([
                 'success' => false,
                 'pending' => $hasPendingOrder,
