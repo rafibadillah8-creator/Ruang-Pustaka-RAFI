@@ -11,6 +11,7 @@ use App\Models\Transaction;
 use App\Models\PaymentOrder;
 use Illuminate\Support\Facades\Log;
 use Exception;
+use App\Services\MidtransGateway;
 
 class PaymentController extends Controller
 {
@@ -18,9 +19,31 @@ class PaymentController extends Controller
     {
         $serverKey = trim(config('services.midtrans.server_key'));
         $isProduction = config('services.midtrans.is_production', false);
-        
+
         $user = Auth::user();
         $book = Book::findOrFail($id);
+
+        try {
+            app(MidtransGateway::class)->configure();
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'snap_token' => null,
+                'message' => $e->getMessage(),
+            ], 503);
+        } catch (\Throwable $e) {
+            Log::error('Midtrans configuration failed.', [
+                'book_id' => $book->id,
+                'user_id' => $user->id,
+                'exception' => $e,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'snap_token' => null,
+                'message' => 'Pembayaran tidak dapat dimulai. Periksa konfigurasi Midtrans atau coba lagi.',
+            ], 503);
+        }
 
         $orderId = 'RP-' . $book->id . '-' . time() . '-' . random_int(100, 999);
         $voucher = null;
@@ -115,6 +138,12 @@ class PaymentController extends Controller
             }
 
         } catch (\Throwable $e) {
+            Log::error('Midtrans Snap token creation failed.', [
+                'book_id' => $book->id,
+                'user_id' => $user->id,
+                'exception' => $e,
+            ]);
+
             return response()->json([
                 'success' => false, 
                 'snap_token' => null,
@@ -138,43 +167,21 @@ class PaymentController extends Controller
         $userId = Auth::id();
         $orderId = $request->input('order_id');
         if (!$orderId) {
-            $orderId = PaymentOrder::where('user_id', $userId)
-                ->where('book_id', $book->id)
-                ->where('status', 'pending')
-                ->latest()
-                ->value('order_id');
-        }
-        if (!$orderId) {
-            $legacyPendingOrder = collect(session('midtrans_pending_' . $book->id, []))
-                ->reverse()
-                ->first();
-            $orderId = $legacyPendingOrder['order_id'] ?? null;
-        }
-        $paymentOrder = $orderId
-            ? PaymentOrder::where('order_id', $orderId)
-                ->where('user_id', $userId)
-                ->where('book_id', $book->id)
-                ->first()
-            : null;
-        $pendingOrder = $paymentOrder?->only(['order_id', 'price', 'voucher_code'])
-            ?? collect(session('midtrans_pending_' . $book->id, []))
-                ->reverse()
-                ->first(function ($order) use ($orderId) {
-                    return $orderId && ($order['order_id'] ?? null) === $orderId;
-                });
-
-        if (!$pendingOrder) {
             return redirect()->route('books.show', $id)
-                ->with('error', 'Pesanan pembayaran tidak ditemukan.');
+                ->with('error', 'ID pesanan pembayaran tidak tersedia. Silakan periksa status pembayaran dari halaman buku.');
+        }
+        $paymentOrder = PaymentOrder::where('order_id', $orderId)
+            ->where('user_id', $userId)
+            ->where('book_id', $book->id)
+            ->first();
+
+        if (!$paymentOrder) {
+            return redirect()->route('books.show', $id)
+                ->with('error', 'Pesanan pembayaran tidak cocok dengan akun atau buku ini.');
         }
 
         try {
-            \Midtrans\Config::$serverKey = config('services.midtrans.server_key');
-            \Midtrans\Config::$isProduction = config('services.midtrans.is_production', false);
-            \Midtrans\Config::$curlOptions = [
-                CURLOPT_CAINFO => 'D:/laragon/etc/ssl/cacert.pem',
-                CURLOPT_HTTPHEADER => [],
-            ];
+            app(MidtransGateway::class)->configure();
             $status = json_decode(json_encode(\Midtrans\Transaction::status($orderId)), true);
         } catch (\Throwable $e) {
             Log::error('Midtrans status verification failed.', [
@@ -185,49 +192,26 @@ class PaymentController extends Controller
                 ->with('error', 'Status pembayaran belum dapat diverifikasi.');
         }
 
-        $transactionStatus = $status['transaction_status'] ?? '';
-        $fraudStatus = $status['fraud_status'] ?? 'accept';
-        if (!($transactionStatus === 'settlement' || ($transactionStatus === 'capture' && $fraudStatus === 'accept'))) {
+        try {
+            app(\App\Services\PaymentOrderFulfillment::class)->applyStatus($paymentOrder, $status);
+        } catch (\InvalidArgumentException $e) {
+            Log::warning('Midtrans callback amount does not match the payment order.', [
+                'order_id' => $orderId,
+                'exception' => $e,
+            ]);
+            return redirect()->route('books.show', $id)
+                ->with('error', 'Nominal pembayaran tidak sesuai dengan pesanan.');
+        }
+
+        if ($paymentOrder->fresh()->status !== 'paid') {
+            $transactionStatus = $status['transaction_status'] ?? '';
             $message = $transactionStatus === 'pending'
                 ? 'Pembayaran Anda masih pending. Akses akan dibuka setelah pembayaran dikonfirmasi.'
                 : 'Pembayaran belum berhasil diverifikasi.';
             return redirect()->route('books.show', $id)->with('error', $message);
         }
 
-        $alreadyRecorded = Transaction::where('user_id', $userId)
-            ->where('book_id', $book->id)
-            ->exists();
-
-        // Ambil harga final (setelah diskon voucher, jika ada) yang disimpan
-        // sebelumnya di getSnapToken(). Fallback ke harga asli jika tidak ada.
-        $finalPrice = (int) $pendingOrder['price'];
-        $voucherCode = $pendingOrder['voucher_code']
-            ?? session('active_voucher_code');
-
-        if (!$alreadyRecorded) {
-            Transaction::create([
-                'user_id' => $userId,
-                'book_id' => $book->id,
-                'title'   => trim($book->title),
-                'author'  => $book->author,
-                'price'   => $finalPrice,
-            ]);
-
-            // Tandai voucher sebagai terpakai (increment used_count)
-            if ($voucherCode) {
-                VoucherController::useVoucherCode($voucherCode);
-            }
-        }
-
-        if ($paymentOrder) {
-            $paymentOrder->update(['status' => 'paid']);
-        }
-
-        session()->put('purchased_books_' . $id, true);
-        session()->forget('midtrans_pending_' . $book->id);
-        session()->forget('final_price_' . $id);
         session()->forget('active_voucher_code');
-        session()->save();
 
         return redirect()->route('books.show', $id)
             ->with('success', 'Pembayaran berhasil! Akses membaca telah dibuka.');
