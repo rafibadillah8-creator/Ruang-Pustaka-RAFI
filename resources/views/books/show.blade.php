@@ -8,7 +8,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <!-- Midtrans Snap JS Script -->
     <script type="text/javascript"
-            src="{{ config('services.midtrans.is_production') ? 'https://app.midtrans.com/snap/snap.js' : 'https://app.sandbox.midtrans.com/snap/snap.js' }}"
+            src="{{ \App\Services\MidtransGateway::snapJsUrl((bool) config('services.midtrans.is_production')) }}"
             data-client-key="{{ config('services.midtrans.client_key') }}"></script>
 </head>
 <body class="bg-parchment text-ink-900 font-sans antialiased min-h-screen flex flex-col justify-between selection:bg-gold-500 selection:text-ink-900">
