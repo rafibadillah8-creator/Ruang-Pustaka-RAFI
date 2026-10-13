@@ -156,10 +156,6 @@
             pointer-events: auto
         }
 
-        .rp-menu-panel {
-            visibility: hidden
-        }
-
         .rp-kbd {
             position: absolute;
             right: 14px;
@@ -460,7 +456,7 @@
                         </button>
 
                         <div data-menu-panel role="menu" aria-label="Menu akun"
-                            class="rp-menu-panel absolute right-0 top-full mt-4 w-56 bg-ink-900 border border-wine-800 rounded-2xl shadow-2xl py-2 z-50">
+                            class="absolute right-0 top-full mt-2 w-56 bg-ink-900 border border-wine-800 rounded-2xl shadow-2xl py-2 z-50">
 
                             <a data-menu-item role="menuitem" href="{{ route('profile.edit') }}"
                                 class="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-wine-100 hover:text-gold-400 hover:bg-wine-800/60 transition-colors">
@@ -709,8 +705,8 @@
                                                 <div class="flex items-center gap-2 mt-0.5">
                                                     <code
                                                         class="font-mono text-base font-extrabold text-gold-400 tracking-wider bg-black/25 px-2.5 py-0.5 rounded-lg border border-gold-400/30">
-                                                        {{ $activeVoucher->code }}
-                                                    </code>
+                                                            {{ $activeVoucher->code }}
+                                                        </code>
                                                     <button @click="copyVoucherCode(@js($activeVoucher->code))"
                                                         class="px-2.5 py-1 bg-gold-500 hover:bg-gold-400 text-ink-900 font-bold text-[11px] rounded-lg transition flex items-center gap-1 shadow-sm cursor-pointer">
                                                         <span x-text="copiedVoucher ? 'Tersalin!' : 'Salin'"></span>
@@ -787,18 +783,26 @@
             </section>
 
             <!-- ==================== KATEGORI / FILTER GENRE ==================== -->
-            @if(count($categories ?? []) > 0)
+            @php
+                $safeCategories = $categories ?? [];
+            @endphp
+            @if(count($safeCategories) > 0)
                 <section class="space-y-3">
                     <div class="flex items-center gap-2">
                         <span class="w-1.5 h-4 bg-wine-700 rounded-full"></span>
                         <h2 class="text-sm font-semibold text-stone-500">Jelajahi Kategori Cepat</h2>
                     </div>
                     <div class="flex gap-2.5 overflow-x-auto no-scrollbar pb-1">
-                        @foreach($categories as $category)
-                            @if(count(data_get($category, 'books', [])) > 0)
-                                <a href="#kategori-{{ data_get($category, 'id') }}"
+                        @foreach($safeCategories as $category)
+                            @php
+                                $catBooks = is_array($category) ? ($category['books'] ?? []) : ($category->books ?? []);
+                                $catId = is_array($category) ? ($category['id'] ?? 1) : $category->id;
+                                $catName = is_array($category) ? ($category['name'] ?? 'Kategori') : $category->name;
+                            @endphp
+                            @if(count($catBooks) > 0)
+                                <a href="#kategori-{{ $catId }}"
                                     class="shrink-0 px-4 py-2 rounded-full text-xs font-semibold bg-white border border-stone-200/80 text-stone-700 rp-chip shadow-xs flex items-center gap-1.5">
-                                    <span>{{ data_get($category, 'name', 'Kategori') }}</span>
+                                    <span>{{ $catName }}</span>
                                 </a>
                             @endif
                         @endforeach
@@ -811,32 +815,32 @@
                 $renderBookCard = function ($book) {
                     $targetUrl = Auth::check() ? route('books.show', data_get($book, 'id', 1)) : route('login');
                     return '<div class="rp-card w-[180px] sm:w-[200px] shrink-0 flex flex-col justify-between group/card">
-                                        <div>
-                                            <a href="' . $targetUrl . '" class="rp-cover block w-full aspect-[3/4] bg-stone-100 rounded-r-xl rounded-l-sm overflow-hidden mb-3.5 relative">
-                                                ' . (data_get($book, 'cover_image')
+                                                        <div>
+                                                            <a href="' . $targetUrl . '" class="rp-cover block w-full aspect-[3/4] bg-stone-100 rounded-r-xl rounded-l-sm overflow-hidden mb-3.5 relative">
+                                                                ' . (data_get($book, 'cover_image')
                         ? '<img src="' . asset('storage/' . data_get($book, 'cover_image')) . '" alt="' . data_get($book, 'title') . '" class="w-full h-full object-cover group-hover/card:scale-105 transition duration-500">'
                         : '<div class="w-full h-full flex flex-col items-center justify-center bg-stone-100 text-stone-300 p-2 text-center">
-                                                        <svg class="w-12 h-12 mb-1" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2v1h3a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3V4a2 2 0 0 1 2-2zm-3 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm-6 6h6v1H9v-1z"/></svg>
-                                                        <span class="text-[10px] text-stone-400">Tidak ada sampul</span>
-                                                       </div>') . '
-                                            </a>
-                                            <a href="' . $targetUrl . '" class="font-bold text-xs sm:text-sm text-stone-900 line-clamp-1 block hover:text-wine-700 transition" title="' . data_get($book, 'title') . '">
-                                                ' . data_get($book, 'title', 'Judul Buku') . '
-                                            </a>
-                                            <p class="text-[11px] text-stone-500 flex items-center gap-1 mt-1 truncate">
-                                                <svg class="w-3.5 h-3.5 text-stone-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                                                <span class="truncate">' . data_get($book, 'author', 'Penulis Tidak Diketahui') . '</span>
-                                            </p>
-                                        </div>
-                                        <div class="mt-3 flex items-center justify-between">
-                                            <span class="rp-price font-extrabold text-xs sm:text-sm text-stone-900">
-                                                Rp ' . number_format(data_get($book, 'price', 0), 0, ',', '.') . '
-                                            </span>
-                                            <a href="' . $targetUrl . '" class="rp-buy p-2.5 bg-wine-700 hover:bg-wine-800 border border-wine-700 rounded-xl text-white transition shadow-md hover:shadow-lg flex items-center justify-center" title="Detail / Beli Buku">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"></path></svg>
-                                            </a>
-                                        </div>
-                                    </div>';
+                                                                        <svg class="w-12 h-12 mb-1" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2v1h3a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3V4a2 2 0 0 1 2-2zm-3 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm-6 6h6v1H9v-1z"/></svg>
+                                                                        <span class="text-[10px] text-stone-400">Tidak ada sampul</span>
+                                                                       </div>') . '
+                                                            </a>
+                                                            <a href="' . $targetUrl . '" class="font-bold text-xs sm:text-sm text-stone-900 line-clamp-1 block hover:text-wine-700 transition" title="' . data_get($book, 'title') . '">
+                                                                ' . data_get($book, 'title', 'Judul Buku') . '
+                                                            </a>
+                                                            <p class="text-[11px] text-stone-500 flex items-center gap-1 mt-1 truncate">
+                                                                <svg class="w-3.5 h-3.5 text-stone-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                                                <span class="truncate">' . data_get($book, 'author', 'Penulis Tidak Diketahui') . '</span>
+                                                            </p>
+                                                        </div>
+                                                        <div class="mt-3 flex items-center justify-between">
+                                                            <span class="rp-price font-extrabold text-xs sm:text-sm text-stone-900">
+                                                                Rp ' . number_format(data_get($book, 'price', 0), 0, ',', '.') . '
+                                                            </span>
+                                                            <a href="' . $targetUrl . '" class="rp-buy p-2.5 bg-wine-700 hover:bg-wine-800 border border-wine-700 rounded-xl text-white transition shadow-md hover:shadow-lg flex items-center justify-center" title="Detail / Beli Buku">
+                                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"></path></svg>
+                                                            </a>
+                                                        </div>
+                                                    </div>';
                 };
             @endphp
 
@@ -874,8 +878,11 @@
                     </div>
                 </div>
 
+                @php
+                    $popBooks = $popularBooks ?? [];
+                @endphp
                 <div class="relative group/slider">
-                    @if(count($popularBooks ?? []) > 4)
+                    @if(count($popBooks) > 4)
                         <button onclick="scrollSlider('slider-popular', 'left')"
                             class="absolute -left-3 top-1/2 -translate-y-1/2 z-20 bg-white/95 backdrop-blur border border-stone-200 shadow-xl p-2.5 rounded-full hover:bg-white text-stone-700 transition hidden group-hover/slider:flex items-center justify-center cursor-pointer">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -891,7 +898,7 @@
                     @endif
 
                     <div id="slider-popular" class="flex gap-5 overflow-x-auto scroll-smooth no-scrollbar py-2 px-1">
-                        @forelse($popularBooks ?? [] as $book)
+                        @forelse($popBooks as $book)
                             {!! $renderBookCard($book) !!}
                         @empty
                             <div
@@ -904,7 +911,10 @@
             </section>
 
             <!-- ==================== REKOMENDASI UNTUKMU ==================== -->
-            @if(count($recommendedBooks ?? []) > 0)
+            @php
+                $recBooks = $recommendedBooks ?? [];
+            @endphp
+            @if(count($recBooks) > 0)
                 <section class="rp-rec space-y-4 p-6 sm:p-10">
                     <div class="flex justify-between items-center">
                         <div class="flex items-center gap-3">
@@ -918,7 +928,7 @@
                     </div>
 
                     <div class="relative group/slider">
-                        @if(count($recommendedBooks) > 4)
+                        @if(count($recBooks) > 4)
                             <button onclick="scrollSlider('slider-recommended', 'left')"
                                 class="absolute -left-3 top-1/2 -translate-y-1/2 z-20 bg-white/95 backdrop-blur border border-stone-200 shadow-xl p-2.5 rounded-full hover:bg-white text-stone-700 transition hidden group-hover/slider:flex items-center justify-center cursor-pointer">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -935,7 +945,7 @@
 
                         <div id="slider-recommended"
                             class="flex gap-5 overflow-x-auto scroll-smooth no-scrollbar py-2 px-1">
-                            @foreach($recommendedBooks as $book)
+                            @foreach($recBooks as $book)
                                 {!! $renderBookCard($book) !!}
                             @endforeach
                         </div>
@@ -944,7 +954,10 @@
             @endif
 
             <!-- ==================== 2. BUKU BARU (< 24 JAM) ==================== -->
-            @if(count($newBooks ?? []) > 0)
+            @php
+                $nBooks = $newBooks ?? [];
+            @endphp
+            @if(count($nBooks) > 0)
                 <section class="space-y-4">
                     <div class="flex justify-between items-center">
                         <div class="flex items-center gap-2.5">
@@ -965,7 +978,7 @@
                     </div>
 
                     <div class="relative group/slider">
-                        @if(count($newBooks) > 4)
+                        @if(count($nBooks) > 4)
                             <button onclick="scrollSlider('slider-new', 'left')"
                                 class="absolute -left-3 top-1/2 -translate-y-1/2 z-20 bg-white/95 backdrop-blur border border-stone-200 shadow-xl p-2.5 rounded-full hover:bg-white text-stone-700 transition hidden group-hover/slider:flex items-center justify-center cursor-pointer">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -981,7 +994,7 @@
                         @endif
 
                         <div id="slider-new" class="flex gap-5 overflow-x-auto scroll-smooth no-scrollbar py-2 px-1">
-                            @foreach($newBooks as $book)
+                            @foreach($nBooks as $book)
                                 {!! $renderBookCard($book) !!}
                             @endforeach
                         </div>
@@ -990,50 +1003,61 @@
             @endif
 
             <!-- ==================== 3. KATEGORI BUKU ==================== -->
-            @foreach($categories ?? [] as $category)
-                @if(count(data_get($category, 'books', [])) > 0)
-                    <section id="kategori-{{ data_get($category, 'id') }}" class="space-y-4 scroll-mt-28">
-                        <div class="flex justify-between items-center">
-                            <div class="flex items-center gap-2.5">
-                                <div class="rp-bar"></div>
-                                <h2 class="font-serif text-2xl sm:text-3xl font-extrabold tracking-tight text-ink-900">
-                                    {{ data_get($category, 'name', 'Kategori') }}</h2>
-                            </div>
-                            <a href="{{ Auth::check() ? route('books.index') : route('login') }}"
-                                class="rp-all text-xs sm:text-sm font-semibold text-wine-800 flex items-center gap-1">
-                                Lihat Semua
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                </svg>
-                            </a>
-                        </div>
-
-                        <div class="relative group/slider">
-                            @if(count(data_get($category, 'books', [])) > 4)
-                                <button onclick="scrollSlider('slider-cat-{{ data_get($category, 'id') }}', 'left')"
-                                    class="absolute -left-3 top-1/2 -translate-y-1/2 z-20 bg-white/95 backdrop-blur border border-stone-200 shadow-xl p-2.5 rounded-full hover:bg-white text-stone-700 transition hidden group-hover/slider:flex items-center justify-center cursor-pointer">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                                    </svg>
-                                </button>
-                                <button onclick="scrollSlider('slider-cat-{{ data_get($category, 'id') }}', 'right')"
-                                    class="absolute -right-3 top-1/2 -translate-y-1/2 z-20 bg-white/95 backdrop-blur border border-stone-200 shadow-xl p-2.5 rounded-full hover:bg-white text-stone-700 transition hidden group-hover/slider:flex items-center justify-center cursor-pointer">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            @php
+                $allCats = $categories ?? [];
+            @endphp
+            @if(count($allCats) > 0)
+                @foreach($allCats as $category)
+                    @php
+                        $catBooks = is_array($category) ? ($category['books'] ?? []) : ($category->books ?? []);
+                        $catId = is_array($category) ? ($category['id'] ?? 1) : $category->id;
+                        $catName = is_array($category) ? ($category['name'] ?? 'Kategori') : $category->name;
+                    @endphp
+                    @if(count($catBooks) > 0)
+                        <section id="kategori-{{ $catId }}" class="space-y-4 scroll-mt-28">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="rp-bar"></div>
+                                    <h2 class="font-serif text-2xl sm:text-3xl font-extrabold tracking-tight text-ink-900">
+                                        {{ $catName }}
+                                    </h2>
+                                </div>
+                                <a href="{{ Auth::check() ? route('books.index') : route('login') }}"
+                                    class="rp-all text-xs sm:text-sm font-semibold text-wine-800 flex items-center gap-1">
+                                    Lihat Semua
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                                     </svg>
-                                </button>
-                            @endif
-
-                            <div id="slider-cat-{{ data_get($category, 'id') }}"
-                                class="flex gap-5 overflow-x-auto scroll-smooth no-scrollbar py-2 px-1">
-                                @foreach(data_get($category, 'books', []) as $book)
-                                    {!! $renderBookCard($book) !!}
-                                @endforeach
+                                </a>
                             </div>
-                        </div>
-                    </section>
-                @endif
-            @endforeach
+
+                            <div class="relative group/slider">
+                                @if(count($catBooks) > 4)
+                                    <button onclick="scrollSlider('slider-cat-{{ $catId }}', 'left')"
+                                        class="absolute -left-3 top-1/2 -translate-y-1/2 z-20 bg-white/95 backdrop-blur border border-stone-200 shadow-xl p-2.5 rounded-full hover:bg-white text-stone-700 transition hidden group-hover/slider:flex items-center justify-center cursor-pointer">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                    </button>
+                                    <button onclick="scrollSlider('slider-cat-{{ $catId }}', 'right')"
+                                        class="absolute -right-3 top-1/2 -translate-y-1/2 z-20 bg-white/95 backdrop-blur border border-stone-200 shadow-xl p-2.5 rounded-full hover:bg-white text-stone-700 transition hidden group-hover/slider:flex items-center justify-center cursor-pointer">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </button>
+                                @endif
+
+                                <div id="slider-cat-{{ $catId }}"
+                                    class="flex gap-5 overflow-x-auto scroll-smooth no-scrollbar py-2 px-1">
+                                    @foreach($catBooks as $book)
+                                        {!! $renderBookCard($book) !!}
+                                    @endforeach
+                                </div>
+                            </div>
+                        </section>
+                    @endif
+                @endforeach
+            @endif
 
             <!-- ==================== TESTIMONI / TRUST SECTION ==================== -->
             <section class="rp-trust mt-16 bg-white border p-8 sm:p-12 shadow-sm relative overflow-hidden">
@@ -1147,7 +1171,7 @@
                     const chev = root.querySelector('[data-menu-chev]');
                     const items = root.querySelectorAll('[data-menu-item]');
                     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-                    const EXIT_SPEED = 1.5; // 1 = sama dengan saat buka, makin besar makin cepat menutup
+                    const EXIT_SPEED = 1.5;
 
                     this.tl = gsap.timeline({ paused: true })
                         .from(panel, { autoAlpha: 0, yPercent: -10, scale: 0.6, duration: 0.8, transformOrigin: 'top right', ease: 'back.out(2)', easeReverse: 'power3.out' }, 0)
@@ -1187,7 +1211,7 @@
         function scrollSlider(elementId, direction) {
             const container = document.getElementById(elementId);
             if (!container) return;
-            const scrollAmount = 3
+            const scrollAmount = 300;
             container.scrollBy({
                 left: direction === 'left' ? -scrollAmount : scrollAmount,
                 behavior: 'smooth'
