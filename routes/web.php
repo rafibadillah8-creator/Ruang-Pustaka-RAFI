@@ -198,6 +198,37 @@ Route::get('/admin/transactions/export', function () {
     return app(\App\Http\Controllers\TransactionExportController::class)->exportPdf();
 })->middleware(['auth', 'admin'])->name('admin.transactions.export');
 
+// Data grafik pendapatan bulanan (dipanggil otomatis oleh halaman Kelola Transaksi tiap beberapa detik)
+Route::get('/admin/transactions/chart-data', function (Request $request) {
+    if (!Auth::check() || Auth::user()->email !== 'rafibadillah8@gmail.com') {
+        return response()->json(['message' => 'Forbidden'], 403);
+    }
+
+    $year = (int) $request->query('year', Carbon::now()->year);
+
+    // Transaksi hanya dicatat setelah Midtrans mengonfirmasi lunas (PaymentOrderFulfillment),
+    // jadi seluruh isi tabel transactions sudah merupakan pembayaran yang benar-benar masuk.
+    // Dikelompokkan di PHP agar jalan di MySQL maupun SQLite.
+    $perMonth = Transaction::whereYear('created_at', $year)
+        ->get(['price', 'created_at'])
+        ->groupBy(fn ($t) => (int) $t->created_at->format('n'));
+
+    $months = collect(range(1, 12))->map(fn ($m) => [
+        'month' => $m,
+        'total' => (int) round(optional($perMonth->get($m))->sum('price') ?? 0),
+        'count' => optional($perMonth->get($m))->count() ?? 0,
+    ])->values();
+
+    return response()->json([
+        'months' => $months,
+        'stats'  => [
+            'today' => (int) round(Transaction::whereDate('created_at', Carbon::today())->sum('price')),
+            'month' => (int) round(Transaction::whereMonth('created_at', Carbon::now()->month)->whereYear('created_at', Carbon::now()->year)->sum('price')),
+            'total' => (int) round(Transaction::sum('price')),
+        ],
+    ]);
+})->middleware(['auth', 'admin'])->name('admin.transactions.chart');
+
 // Rute Admin Grup (Kategori, JSON Data Buku, dan CRUD Buku Admin)
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/books/create', [BookController::class, 'create'])->name('books.create');
@@ -336,4 +367,4 @@ Route::post('/books/{id}/check-payment', [BookController::class, 'checkPayment']
 Route::get('/books/{id}/read', [UserController::class, 'readBook'])->name('books.read');
 
 // Rute Apply Kode Voucher (dipakai user di halaman detail buku)
-Route::post('/voucher/apply', [VoucherController::class, 'apply'])->name('voucher.apply');
+Route::post('/voucher/apply', [VoucherController::class, 'apply'])->name('voucher.apply'); 
