@@ -211,6 +211,14 @@ class BookController extends Controller
             $isPurchased = true;
         }
 
+        $pendingPaymentOrderId = !$isPurchased && auth()->check()
+            ? PaymentOrder::where('user_id', auth()->id())
+                ->where('book_id', $book->id)
+                ->where('status', 'pending')
+                ->latest()
+                ->value('order_id')
+            : null;
+
         // Ambil voucher aktif untuk banner slider
         try {
             $activeVoucher = Voucher::where(function($q) {
@@ -229,7 +237,7 @@ class BookController extends Controller
             $viewName = 'admin.books.show';
         }
 
-        return view($viewName, compact('book', 'id', 'isPurchased', 'activeVoucher'));
+        return view($viewName, compact('book', 'id', 'isPurchased', 'pendingPaymentOrderId', 'activeVoucher'));
     }
 
     public function edit($id)
@@ -475,7 +483,8 @@ class BookController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'snap_token' => $snapToken
+                    'snap_token' => $snapToken,
+                    'order_id' => $orderId,
                 ]);
             } catch (Exception $e) {
                 Log::error('Midtrans Snap token creation failed.', [
@@ -542,18 +551,16 @@ class BookController extends Controller
             ]);
         }
 
-        // Persisted payment orders are the only source of payment state.
-        $databaseOrders = PaymentOrder::where('user_id', $userId)
-            ->where('book_id', $book->id)
-            ->whereNotIn('status', ['failed', 'paid'])
-            ->where('created_at', '>=', now()->subHours(24))
-            ->latest()
-            ->get()
-            ->reverse()
-            ->values();
-        $orders = $databaseOrders;
+        $orderId = $request->input('order_id');
+        $order = is_string($orderId) && $orderId !== ''
+            ? PaymentOrder::where('order_id', $orderId)
+                ->where('book_id', $book->id)
+                ->where('user_id', $userId)
+                ->whereNotIn('status', ['failed', 'paid'])
+                ->first()
+            : null;
 
-        if ($orders->isEmpty()) {
+        if (!$order) {
             return response()->json([
                 'success' => false,
                 'pending' => false,
@@ -562,68 +569,51 @@ class BookController extends Controller
             ], 200);
         }
 
-        $paidOrder = null;
-        $lastStatus = null;
-        $hasPendingOrder = false;
-        $statusLookupFailed = false;
+        try {
+            $status = app(MidtransGateway::class)->transactionStatus($order->order_id);
+        } catch (\Throwable $e) {
+            Log::warning('Midtrans payment status lookup failed.', [
+                'order_id' => $order->order_id,
+                'exception' => $e,
+            ]);
 
-        foreach ($orders as $order) {
-            try {
-                $result = app(MidtransGateway::class)->transactionStatus($order->order_id);
-            } catch (\Throwable $e) {
-                $statusLookupFailed = true;
-                Log::warning('Midtrans payment status lookup failed.', [
-                    'order_id' => $order->order_id,
-                    'exception' => $e,
-                ]);
-                if ($order->created_at->greaterThan(now()->subHours(24))) {
-                    $hasPendingOrder = true;
-                }
-                continue;
-            }
-
-            $trxStatus = $result['transaction_status'] ?? '';
-            $lastStatus = $trxStatus;
-
-            try {
-                app(\App\Services\PaymentOrderFulfillment::class)->applyStatus($order, $result);
-            } catch (\InvalidArgumentException $e) {
-                Log::warning('Midtrans returned an amount that does not match the payment order.', [
-                    'order_id' => $order->order_id,
-                    'exception' => $e,
-                ]);
-                continue;
-            }
-
-            if ($order->fresh()->status === 'paid') {
-                $paidOrder = $order;
-                break;
-            }
-
-            if (in_array($trxStatus, ['pending', 'authorize', 'capture'], true)
-                || $order->created_at->greaterThan(now()->subHours(24))) {
-                $hasPendingOrder = true;
-            }
-        }
-
-        if (!$paidOrder) {
-            if ($statusLookupFailed) {
-                return response()->json([
-                    'success' => false,
-                    'pending' => false,
-                    'status_unavailable' => true,
-                    'message' => 'Status pembayaran belum dapat diverifikasi ke Midtrans. Periksa pasangan Client Key/Server Key dan mode Sandbox/Production, lalu muat ulang halaman.'
-                ], 503);
-            }
+            $message = preg_match("/transaction (doesn't|does not) exist/i", $e->getMessage())
+                ? 'Order tidak ditemukan oleh akun Midtrans yang dipakai aplikasi. Cocokkan Merchant ID serta pasangan Sandbox Client Key dan Server Key dengan akun transaksi. Jangan bayar lagi.'
+                : 'Status pembayaran belum dapat diverifikasi ke Midtrans. Pastikan akun Sandbox yang digunakan sama dengan akun transaksi.';
 
             return response()->json([
                 'success' => false,
-                'pending' => $hasPendingOrder,
+                'pending' => false,
+                'status_unavailable' => true,
+                'message' => $message
+            ], 503);
+        }
+
+        try {
+            app(\App\Services\PaymentOrderFulfillment::class)->applyStatus($order, $status);
+        } catch (\InvalidArgumentException $e) {
+            Log::warning('Midtrans returned an amount that does not match the payment order.', [
+                'order_id' => $order->order_id,
+                'exception' => $e,
+            ]);
+            return response()->json([
+                'success' => false,
+                'pending' => false,
                 'terminal_failure' => false,
-                'status'  => $lastStatus,
-                'message' => $hasPendingOrder
-                    ? 'Pembayaran belum lunas.'
-                    : 'Belum ada pembayaran yang berhasil.'
+                'message' => 'Nominal pembayaran tidak sesuai dengan pesanan.'
+            ], 422);
+        }
+
+        if ($order->fresh()->status !== 'paid') {
+            $transactionStatus = $status['transaction_status'] ?? '';
+            $isPending = in_array($transactionStatus, ['pending', 'authorize', 'capture'], true);
+
+            return response()->json([
+                'success' => false,
+                'pending' => $isPending,
+                'terminal_failure' => false,
+                'status' => $transactionStatus,
+                'message' => $isPending ? 'Pembayaran belum lunas.' : 'Belum ada pembayaran yang berhasil.'
             ], 200);
         }
 

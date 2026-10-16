@@ -145,10 +145,79 @@ class MidtransNotificationTest extends TestCase
         $this->app->instance(MidtransGateway::class, $gateway);
 
         $this->actingAs(User::findOrFail($order->user_id))
-            ->postJson('/books/' . $order->book_id . '/check-payment')
+            ->postJson('/books/' . $order->book_id . '/check-payment', [
+                'order_id' => $order->order_id,
+            ])
             ->assertStatus(503)
             ->assertJsonPath('status_unavailable', true)
+            ->assertJsonPath('pending', false)
+            ->assertJsonPath('message', 'Order tidak ditemukan oleh akun Midtrans yang dipakai aplikasi. Cocokkan Merchant ID serta pasangan Sandbox Client Key dan Server Key dengan akun transaksi. Jangan bayar lagi.');
+    }
+
+    public function test_payment_status_checks_only_the_requested_order_and_grants_access(): void
+    {
+        $order = $this->createPaymentOrder();
+        $otherOrder = PaymentOrder::create([
+            'order_id' => 'OTHER-' . uniqid(),
+            'user_id' => $order->user_id,
+            'book_id' => $order->book_id,
+            'price' => $order->price,
+            'status' => 'pending',
+        ]);
+        $gateway = Mockery::mock(MidtransGateway::class);
+        $gateway->shouldReceive('transactionStatus')
+            ->once()
+            ->with($order->order_id)
+            ->andReturn([
+                'order_id' => $order->order_id,
+                'transaction_status' => 'settlement',
+                'gross_amount' => '100000.00',
+            ]);
+        $this->app->instance(MidtransGateway::class, $gateway);
+
+        $this->actingAs(User::findOrFail($order->user_id))
+            ->postJson('/books/' . $order->book_id . '/check-payment', [
+                'order_id' => $order->order_id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('payment_orders', [
+            'id' => $order->id,
+            'status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('payment_orders', [
+            'id' => $otherOrder->id,
+            'status' => 'pending',
+        ]);
+        $this->actingAs(User::findOrFail($order->user_id))
+            ->get('/books/' . $order->book_id . '/read')
+            ->assertOk();
+    }
+
+    public function test_payment_status_does_not_query_midtrans_without_an_order_id(): void
+    {
+        $order = $this->createPaymentOrder();
+        $gateway = Mockery::mock(MidtransGateway::class);
+        $gateway->shouldNotReceive('transactionStatus');
+        $this->app->instance(MidtransGateway::class, $gateway);
+
+        $this->actingAs(User::findOrFail($order->user_id))
+            ->postJson('/books/' . $order->book_id . '/check-payment')
+            ->assertOk()
+            ->assertJsonPath('success', false)
             ->assertJsonPath('pending', false);
+    }
+
+    public function test_book_page_offers_to_check_existing_pending_payment(): void
+    {
+        $order = $this->createPaymentOrder();
+
+        $this->actingAs(User::findOrFail($order->user_id))
+            ->get('/books/' . $order->book_id)
+            ->assertOk()
+            ->assertSee('Periksa Status Pembayaran')
+            ->assertSee('data-pending-order-id="' . $order->order_id . '"', false);
     }
 
     public function test_ngrok_tunnel_only_exposes_the_midtrans_notification_endpoint(): void

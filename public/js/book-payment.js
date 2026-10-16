@@ -10,9 +10,11 @@
     const csrfToken = button.dataset.csrfToken;
     const buyUrl = '/books/' + bookId + '/buy';
     const checkUrl = '/books/' + bookId + '/check-payment';
+    let pendingOrderId = button.dataset.pendingOrderId || null;
     let paymentPollTimer = null;
     let paymentPollCount = 0;
     let paymentCheckInFlight = false;
+    let activeOrderId = pendingOrderId;
 
     const postBuy = (payload) => fetch(buyUrl, {
         method: 'POST',
@@ -30,10 +32,17 @@
 
     const resetButton = () => {
         button.disabled = false;
-        button.textContent = 'Beli & Bayar Sekarang';
+        button.textContent = pendingOrderId
+            ? 'Periksa Status Pembayaran'
+            : 'Beli & Bayar Sekarang';
     };
 
-    const startPaymentPolling = () => {
+    const startPaymentPolling = (orderId) => {
+        if (!orderId) {
+            return;
+        }
+
+        activeOrderId = orderId;
         if (paymentPollTimer) {
             return;
         }
@@ -47,11 +56,15 @@
                 resetButton();
                 return;
             }
-            checkPendingPayment();
+            checkPendingPayment(activeOrderId);
         }, 4000);
     };
 
-    const checkPendingPayment = () => {
+    const checkPendingPayment = (orderId, notifyOnUnavailable = false) => {
+        if (!orderId) {
+            return Promise.resolve();
+        }
+
         if (paymentCheckInFlight) {
             return Promise.resolve();
         }
@@ -64,7 +77,7 @@
                 'X-CSRF-TOKEN': csrfToken,
                 'Accept': 'application/json'
             },
-            body: '{}'
+            body: JSON.stringify({ order_id: orderId })
         })
             .then((response) => response.json())
             .then((data) => {
@@ -74,7 +87,9 @@
                         paymentPollTimer = null;
                     }
                     resetButton();
-                    alert(data.message || 'Status pembayaran belum dapat diverifikasi ke Midtrans.');
+                    if (notifyOnUnavailable) {
+                        alert(data.message || 'Status pembayaran belum dapat diverifikasi ke Midtrans.');
+                    }
                     return;
                 }
 
@@ -88,13 +103,17 @@
                 }
 
                 if (data && data.pending) {
-                    startPaymentPolling();
+                    resetButton();
+                    startPaymentPolling(orderId);
                 } else {
                     if (paymentPollTimer) {
                         window.clearInterval(paymentPollTimer);
                         paymentPollTimer = null;
                     }
                     resetButton();
+                }
+                if (notifyOnUnavailable) {
+                    alert((data && data.message) || 'Pembayaran belum terkonfirmasi.');
                 }
             })
             .catch(() => {
@@ -116,15 +135,24 @@
                 return;
             }
 
-            startPaymentPolling();
-            checkPendingPayment();
+            pendingOrderId = activeOrderId;
+            startPaymentPolling(result && result.order_id ? result.order_id : activeOrderId);
+            checkPendingPayment(activeOrderId);
         }).catch(() => {
-            startPaymentPolling();
-            checkPendingPayment();
+            pendingOrderId = activeOrderId;
+            startPaymentPolling(activeOrderId);
+            checkPendingPayment(activeOrderId);
         });
     };
 
     button.addEventListener('click', () => {
+        if (pendingOrderId) {
+            button.disabled = true;
+            button.textContent = 'Memeriksa Pembayaran...';
+            checkPendingPayment(pendingOrderId, true);
+            return;
+        }
+
         const voucherInput = document.getElementById('voucher_code_input');
         const voucherCode = voucherInput ? voucherInput.value : '';
 
@@ -144,30 +172,32 @@
                     return;
                 }
 
+                activeOrderId = data.order_id;
+                pendingOrderId = data.order_id;
+
                 if (!window.snap) {
                     alert('Midtrans belum siap. Muat ulang halaman lalu coba lagi.');
                     resetButton();
                     return;
                 }
 
-                // Mulai polling otomatis di latar belakang begitu token dibuat
-                startPaymentPolling();
-
                 window.snap.pay(data.snap_token, {
                     onSuccess: (result) => confirmPayment(result, voucherCode),
-                    onPending: () => {
+                    onPending: (result) => {
                         resetButton();
-                        startPaymentPolling();
-                        checkPendingPayment();
+                        startPaymentPolling(result && result.order_id ? result.order_id : activeOrderId);
+                        checkPendingPayment(activeOrderId);
                     },
                     onError: () => {
                         alert('Pembayaran gagal. Silakan coba lagi.');
+                        pendingOrderId = null;
+                        activeOrderId = null;
                         resetButton();
                     },
                     onClose: () => {
                         resetButton();
-                        startPaymentPolling();
-                        checkPendingPayment();
+                        startPaymentPolling(activeOrderId);
+                        checkPendingPayment(activeOrderId);
                     }
                 });
             })
@@ -177,5 +207,4 @@
             });
     });
 
-    checkPendingPayment();
 }());
