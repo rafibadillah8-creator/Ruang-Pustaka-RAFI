@@ -5,17 +5,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $book->title }} - Ruang Pustaka</title>
+    {{-- [BARU] Terapkan tema tersimpan sebelum halaman tampil (cegah berkedip) --}}
+    <script>(function(){try{var t=localStorage.getItem('rp-theme');if(!t)t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t}catch(e){}})()</script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <!-- Midtrans Snap JS Script -->
     <script type="text/javascript"
             src="{{ \App\Services\MidtransGateway::snapJsUrl((bool) config('services.midtrans.is_production')) }}"
             data-client-key="{{ config('services.midtrans.client_key') }}"></script>
+    <style>
+        /* ===== [BARU] Ruang Baca Malam: token, mode terang/gelap ===== */
+        [x-cloak]{display:none!important}
+        .font-serif{font-family:'Fraunces',Georgia,serif}
+        .font-sans,body{font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+        a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #C79A4B;outline-offset:3px}
+        :root{--rp-bg:#F6EFE2;--rp-surface:#FCF8EF;--rp-surface2:#F0E6D2;--rp-ink:#2B211B;--rp-soft:#6B5B4F;--rp-line:#E3D6BF;--rp-nav:#2A1A17;--rp-link:#8a5f1f}
+        html[data-theme="dark"]{--rp-bg:#17120F;--rp-surface:#221A16;--rp-surface2:#2C221C;--rp-ink:#EADFCB;--rp-soft:#A99A88;--rp-line:#3A2E27;--rp-nav:#120D0B;--rp-link:#D2A65A;color-scheme:dark}
+        body.bg-parchment{background-color:var(--rp-bg);color:var(--rp-ink);transition:background-color .3s,color .3s;
+         background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2'/><feColorMatrix values='0 0 0 0 .4 0 0 0 0 .3 0 0 0 0 .2 0 0 0 .08 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+        .rp-nav{background-image:none!important;background-color:var(--rp-nav)!important}
+
+        /* tombol tema */
+        .rp-theme{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:#E3BE7C;border:1px solid rgba(227,190,124,.35);background:transparent;cursor:pointer;transition:background .2s,transform .2s}
+        .rp-theme:hover{background:rgba(227,190,124,.15);transform:rotate(12deg)}
+        .rp-theme .i-sun{display:none}
+        html[data-theme="dark"] .rp-theme .i-sun{display:block}
+        html[data-theme="dark"] .rp-theme .i-moon{display:none}
+
+        /* sampul buku 3D */
+        .rp-persp{perspective:900px;overflow:visible!important}
+        .rp-cover3d{position:relative;transform:rotateY(-8deg);transform-origin:left center;transition:transform .5s cubic-bezier(.2,.8,.2,1),box-shadow .5s;box-shadow:0 16px 28px -16px rgba(40,20,10,.6)}
+        .rp-cover3d:hover{transform:rotateY(-2deg)}
+        .rp-cover3d::before{content:"";position:absolute;inset:0 auto 0 0;width:10px;z-index:2;pointer-events:none;background:linear-gradient(90deg,rgba(0,0,0,.28),rgba(255,255,255,.14))}
+
+        @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+        /* mode gelap */
+        html[data-theme="dark"] :is(main,nav) :is(.bg-white,.bg-white\/95,.bg-white\/80){background-color:var(--rp-surface)}
+        html[data-theme="dark"] :is(main,nav) :is(.bg-stone-50,.bg-stone-100,.bg-wine-50,.bg-wine-50\/80,.bg-wine-50\/60){background-color:var(--rp-surface2)}
+        html[data-theme="dark"] :is(main,nav) :is(.border-stone-100,.border-stone-200,.border-stone-300,.border-stone-200\/80,.border-wine-100,.border-wine-200,.border-wine-200\/60,.border-wine-200\/50){border-color:var(--rp-line)}
+        html[data-theme="dark"] :is(main,nav) :is(.text-stone-900,.text-stone-800,.text-stone-700,.text-ink-900):not([class*="gold-"]){color:var(--rp-ink)}
+        html[data-theme="dark"] :is(main,nav) :is(.text-stone-600,.text-stone-500,.text-stone-400,.text-stone-300){color:var(--rp-soft)}
+        html[data-theme="dark"] :is(main,nav) .text-wine-800{color:var(--rp-link)}
+        html[data-theme="dark"] main :is(.bg-emerald-50){background-color:rgba(63,91,74,.3)}
+        html[data-theme="dark"] main :is(.bg-blue-50){background-color:rgba(70,95,130,.3)}
+        html[data-theme="dark"] main :is(.text-emerald-800,.text-emerald-700,.text-emerald-600){color:#8DB39A}
+        html[data-theme="dark"] main .text-blue-800{color:#9db8d9}
+        html[data-theme="dark"] main :is(.border-emerald-200,.border-blue-200){border-color:var(--rp-line)}
+        html[data-theme="dark"] :is(main,nav) .hover\:bg-wine-50:hover,html[data-theme="dark"] nav .hover\:bg-wine-50\/60:hover{background-color:var(--rp-surface2)}
+    </style>
 </head>
 <body class="bg-parchment text-ink-900 font-sans antialiased min-h-screen flex flex-col justify-between selection:bg-gold-500 selection:text-ink-900">
 
     <div class="flex-1">
         <!-- Navbar Dynamic (Tamu vs Auth) -->
-        <nav class="border-b border-wine-900/20 bg-gradient-to-r from-wine-900 via-ink-900 to-wine-900 backdrop-blur-md px-4 sm:px-8 py-3.5 flex justify-between items-center sticky top-0 z-50 transition-all shadow-md">
+        <nav class="rp-nav border-b border-wine-900/20 bg-gradient-to-r from-wine-900 via-ink-900 to-wine-900 backdrop-blur-md px-4 sm:px-8 py-3.5 flex justify-between items-center sticky top-0 z-50 transition-all shadow-md">
             <a href="{{ url('/') }}" class="flex items-center gap-2.5 text-lg sm:text-xl font-bold text-gold-400 hover:text-gold-300 transition">
                 <img src="{{ asset('images/logo.svg') }}" alt="Logo Ruang Pustaka" class="h-10 w-10 object-contain drop-shadow">
                 <span class="font-serif tracking-tight">Ruang Pustaka</span>
@@ -59,6 +105,12 @@
             </div>
 
             <div class="flex items-center gap-2 sm:gap-3">
+                <!-- [BARU] Tombol tema terang/gelap -->
+                <button type="button" id="rp-theme" class="rp-theme" aria-label="Ganti tema terang atau gelap" title="Ganti tema">
+                    <svg class="i-moon w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+                    <svg class="i-sun w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4l1.4-1.4"/></svg>
+                </button>
+
                 <!-- Tombol Search (mobile) -->
                 <a href="{{ Auth::check() ? route('books.index') : route('login') }}" class="md:hidden p-2 text-wine-200 hover:text-gold-400 hover:bg-wine-800/60 rounded-xl transition" title="Cari Buku">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,8 +210,8 @@
                 <!-- Cover Buku (Kiri) -->
                 <div class="lg:col-span-4">
                     <div class="sticky top-24">
-                        <div class="bg-white rounded-3xl border border-stone-200/80 shadow-lg overflow-hidden p-4">
-                            <div class="w-full aspect-[3/4] bg-stone-100 rounded-2xl overflow-hidden border border-ink-900/10">
+                        <div class="rp-persp bg-white rounded-3xl border border-stone-200/80 shadow-lg overflow-hidden p-4">
+                            <div class="rp-cover3d w-full aspect-[3/4] bg-stone-100 rounded-2xl overflow-hidden border border-ink-900/10">
                                 @if($book->cover_image && $book->cover_image !== 'default_cover.jpg')
                                     <img src="{{ asset('storage/' . $book->cover_image) }}" alt="{{ $book->title }}" class="w-full h-full object-cover">
                                 @else
@@ -312,11 +364,12 @@
                                 <button id="pay-button"
                                         data-book-id="{{ $book->id }}"
                                         data-csrf-token="{{ csrf_token() }}"
+                                        data-pending-order-id="{{ $pendingPaymentOrderId ?? '' }}"
                                         class="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-gold-500 to-gold-400 hover:from-gold-400 hover:to-gold-300 text-ink-900 py-4 rounded-2xl font-bold text-sm shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
                                     </svg>
-                                    Beli & Bayar Sekarang
+                                    {{ $pendingPaymentOrderId ? 'Periksa Status Pembayaran' : 'Beli & Bayar Sekarang' }}
                                 </button>
                             @else
                                 <a href="{{ route('login') }}"
@@ -358,6 +411,21 @@
                                 <svg class="w-4 h-4 text-gold-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                                 <span class="text-stone-600">Format: <strong class="text-stone-900">E-Book Digital</strong></span>
                             </div>
+
+                            {{-- [BARU] Total halaman (tampil jika kolomnya ada di tabel books) --}}
+                            @php
+                                $pgAttrs = $book->getAttributes();
+                                $totalPages = null;
+                                foreach (['total_pages', 'page_count', 'pages_count', 'jumlah_halaman', 'pages', 'halaman'] as $pk) {
+                                    if (isset($pgAttrs[$pk]) && is_numeric($pgAttrs[$pk])) { $totalPages = (int) $pgAttrs[$pk]; break; }
+                                }
+                            @endphp
+                            @if($totalPages)
+                            <div class="flex items-center gap-3 bg-white/80 rounded-xl px-4 py-3 border border-wine-100">
+                                <svg class="w-4 h-4 text-gold-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                                <span class="text-stone-600">Total halaman: <strong class="text-stone-900">{{ number_format($totalPages, 0, ',', '.') }} halaman</strong></span>
+                            </div>
+                            @endif
                             <div class="flex items-center gap-3 bg-white/80 rounded-xl px-4 py-3 border border-wine-100">
                                 <svg class="w-4 h-4 text-gold-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                 <span class="text-stone-600">Akses: <strong class="text-stone-900">Selamanya</strong></span>
@@ -490,5 +558,13 @@
     <script src="{{ asset('js/book-payment.js') }}?v={{ filemtime(public_path('js/book-payment.js')) }}"></script>
     @endif
     @endauth
+    {{-- [BARU] Tombol tema terang/gelap --}}
+    <script>
+        document.getElementById('rp-theme')?.addEventListener('click', function () {
+            var r = document.documentElement, n = r.dataset.theme === 'dark' ? 'light' : 'dark';
+            r.dataset.theme = n;
+            try { localStorage.setItem('rp-theme', n); } catch (e) {}
+        });
+    </script>
 </body>
 </html>
